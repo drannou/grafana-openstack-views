@@ -13,9 +13,18 @@ Grafana → Dashboards → New → Import → coller le JSON (ou "Upload").
 
 ## Principe
 
-- **`$aggregate`** : liste déroulante (single-select) peuplée depuis le label `aggregates` exposé par l'exporter. Choisir un aggregat filtre la liste de hosts affichés.
-- **`$hostname`** : liste des hosts membres de l'aggregat sélectionné (chaînée sur `$aggregate`).
-- Un panel **Stat carré est répété** (`repeat: hostname`) pour chaque host : titre = hostname, puis RAM % et CPU % empilés, avec fond coloré (vert/orange/rouge) selon des seuils.
+- **`$aggregate`** : liste déroulante multi-select, peuplée depuis le label `aggregates` exposé par l'exporter. Par défaut sur **All** → toutes les rows (une par aggregat) s'affichent. Sélectionner un ou plusieurs aggregats limite l'affichage à ceux-ci.
+- Une **row Grafana est répétée par aggregat** (`repeat: aggregate` sur le panel de type `row`) : une section par aggregat, avec son titre (`Aggregat : <nom>`).
+- **`$hostname`** : liste des hosts membres de l'aggregat courant (chaînée sur `$aggregate`).
+- Dans chaque row, un panel **Bar gauge est répété par host** (`repeat: hostname`) : titre = hostname, barre RAM au-dessus, barre CPU en dessous, colorées (vert/orange/rouge) selon des seuils.
+
+### ⚠️ À vérifier à l'import : repeat imbriqué (row + panel)
+
+La combinaison "row répétée par aggregat" contenant "panel répété par host filtré sur cet aggregat" est un **repeat imbriqué**. Ce pattern est officiellement supporté depuis les versions récentes de Grafana (moteur "Scenes", Grafana ≥ 10.3), mais sur des versions plus anciennes le ré-scoping de `$hostname` par row peut ne pas fonctionner correctement (toutes les rows affichant alors les mêmes hosts). **À tester en premier après import** : sélectionnez au moins 2 aggregats différents et vérifiez que chaque row affiche bien des hosts différents et cohérents avec son propre aggregat. Si ce n'est pas le cas, dites-le moi (avec votre version de Grafana) — je basculerai sur une variante sans repeat imbriqué (une row par aggregat définie explicitement, ou un dashboard généré par script à partir de la liste réelle d'aggregats).
+
+## Tri par RAM/CPU
+
+Grafana ne permet pas de trier des panels répétés (les carrés) par une valeur de métrique — seul l'ordre du label (ici `hostname`, alphabétique) est utilisable pour l'ordre du repeat. Le tri par valeur RAM/CPU n'existe nativement que sur un panel **Table** (tri au clic sur la colonne) ; c'est un compromis assumé en gardant le rendu "carrés".
 
 ## Calcul du "théorique"
 
@@ -33,6 +42,10 @@ L'exporter expose `aggregates` comme **une seule chaîne, aggregats séparés pa
 - Le filtrage par panel (`aggregates=~".*$aggregate.*"`) fonctionne correctement même pour un host multi-aggregat.
 - Mais le menu déroulant `$aggregate` peut lister des entrées composites (`"rack-a,gpu"`) en plus des noms simples, si des hosts cumulent plusieurs aggregats — Prometheus/Grafana ne peuvent pas éclater une valeur de label en plusieurs entrées de variable côté requête.
 - Si vos aggregats sont mutuellement exclusifs (cas le plus courant), ce n'est pas un problème. Sinon, dites-le moi : on peut générer des *recording rules* Prometheus (une règle par aggregat connu) pour produire un label propre par aggregat.
+
+## Rendu visuel
+
+Panel type **Bar gauge**, orienté horizontal : une barre RAM au-dessus d'une barre CPU, par host. `max` est fixé à 100 — si un host est en overcommit (> 100 %), la barre se remplit entièrement mais le texte affiché reste la vraie valeur (ex. `320 %`).
 
 ## Seuils à ajuster
 

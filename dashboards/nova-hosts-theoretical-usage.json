@@ -32,9 +32,9 @@
         "definition": "label_values(openstack_nova_vcpus_available, aggregates)",
         "sort": 1,
         "refresh": 2,
-        "multi": false,
-        "includeAll": false,
-        "current": {}
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
       },
       {
         "name": "hostname",
@@ -57,20 +57,23 @@
   },
   "panels": [
     {
+      "id": 1,
       "type": "row",
-      "title": "Hosts de l'aggregat : $aggregate",
+      "title": "Aggregat : $aggregate",
+      "repeat": "aggregate",
+      "repeatDirection": "v",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "panels": []
     },
     {
       "id": 2,
-      "type": "stat",
+      "type": "bargauge",
       "title": "${hostname}",
       "repeat": "hostname",
       "repeatDirection": "h",
-      "maxPerRow": 8,
-      "gridPos": { "h": 6, "w": 3, "x": 0, "y": 1 },
+      "maxPerRow": 10,
+      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
@@ -89,11 +92,12 @@
         }
       ],
       "options": {
-        "orientation": "vertical",
-        "textMode": "value_and_name",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true,
+        "minVizHeight": 10,
+        "minVizWidth": 0,
         "reduceOptions": {
           "calcs": ["lastNotNull"],
           "fields": "",
@@ -105,6 +109,7 @@
           "unit": "percent",
           "decimals": 0,
           "min": 0,
+          "max": 100,
           "thresholds": {
             "mode": "absolute",
             "steps": [
