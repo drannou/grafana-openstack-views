@@ -1,0 +1,121 @@
+{
+  "title": "OpenStack Nova - Usage théorique des hosts par aggregat",
+  "uid": "nova-hosts-theoretical-usage",
+  "tags": ["openstack", "nova", "capacity"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "5m",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "label": "Prometheus",
+        "query": "prometheus",
+        "current": {},
+        "refresh": 1,
+        "hide": 0
+      },
+      {
+        "name": "aggregate",
+        "type": "query",
+        "label": "Aggregat",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": {
+          "qryType": 1,
+          "query": "label_values(openstack_nova_vcpus_available, aggregates)",
+          "refId": "aggregate-variable"
+        },
+        "definition": "label_values(openstack_nova_vcpus_available, aggregates)",
+        "sort": 1,
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "current": {}
+      },
+      {
+        "name": "hostname",
+        "type": "query",
+        "label": "Host",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": {
+          "qryType": 1,
+          "query": "label_values(openstack_nova_vcpus_available{aggregates=~\".*$aggregate.*\"}, hostname)",
+          "refId": "hostname-variable"
+        },
+        "definition": "label_values(openstack_nova_vcpus_available{aggregates=~\".*$aggregate.*\"}, hostname)",
+        "sort": 1,
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Hosts de l'aggregat : $aggregate",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "${hostname}",
+      "repeat": "hostname",
+      "repeatDirection": "h",
+      "maxPerRow": 8,
+      "gridPos": { "h": 6, "w": 3, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "100 * openstack_nova_memory_used_bytes{hostname=~\"^$hostname$\"} / openstack_nova_memory_available_bytes{hostname=~\"^$hostname$\"}",
+          "legendFormat": "RAM %",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "100 * openstack_nova_vcpus_used{hostname=~\"^$hostname$\"} / openstack_nova_vcpus_available{hostname=~\"^$hostname$\"}",
+          "legendFormat": "CPU %",
+          "instant": true
+        }
+      ],
+      "options": {
+        "orientation": "vertical",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 80 },
+              { "color": "red", "value": 100 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    }
+  ]
+}
