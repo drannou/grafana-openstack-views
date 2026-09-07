@@ -47,6 +47,21 @@ L'exporter expose `aggregates` comme **une seule chaîne, aggregats séparés pa
 
 Panel type **Bar gauge**, orienté horizontal : une barre RAM au-dessus d'une barre CPU, par host. `max` est fixé à 100 — si un host est en overcommit (> 100 %), la barre se remplit entièrement mais le texte affiché reste la vraie valeur (ex. `320 %`).
 
+## Synthèse par aggregat
+
+En tête de chaque section aggregat, 4 tuiles :
+- **Hosts** : `count(openstack_nova_vcpus_available{aggregates=~".*$aggregate.*"})`
+- **RAM moyenne** / **CPU moyen** : moyenne des % par host (mêmes seuils vert/orange/rouge que les carrés). Les hosts avec une capacité à 0 (ex. bug de pinning en cours d'investigation) sont **exclus** du calcul via un filtre `and ... > 0`, pour ne pas polluer la moyenne avec un `+Inf`.
+- **VMs** : `sum(openstack_nova_running_vms{aggregates=~".*$aggregate.*"})` — somme toutes tenants confondus (le label `tenant_id` de cette métrique est agrégé par le `sum()`).
+
+## Indicateur "nova-compute disabled"
+
+Une 3ᵉ barre apparaît **uniquement** sur les hosts dont le service `nova-compute` est administrativement désactivé (`openstack compute service set --disable`) : bande rouge pleine avec le texte `⚠ DISABLED`. Basée sur `openstack_nova_agent_state{service="nova-compute", adminState="disabled"}`.
+
+- Un host activé n'affiche **aucune** 3ᵉ barre (requête sans résultat) — seuls RAM/CPU restent visibles, panel légèrement plus compact.
+- ⚠️ Cet indicateur suppose que le label `hostname` de `openstack_nova_agent_state` (dérivé de `service.Host`) correspond au `hostname` des métriques hyperviseur (dérivé de `hypervisor.HypervisorHostname`). C'est le cas standard, mais vérifiez dans Explore : `openstack_nova_agent_state{service="nova-compute"}` — si les valeurs `hostname` ne matchent pas celles de `openstack_nova_vcpus_available`, la barre ne s'affichera jamais et il faudra adapter le label utilisé.
+- Ne reflète que l'état **admin** (enabled/disabled), pas le heartbeat up/down du service (un service down mais toujours enabled n'affichera pas cette barre).
+
 ## Seuils à ajuster
 
 Les seuils actuels (vert < 80 %, orange 80-100 %, rouge ≥ 100 %) sont identiques pour RAM et CPU. Si votre `cpu_allocation_ratio` est > 1 (overcommit CPU volontaire, cas fréquent), un rouge à 100 % sur le CPU sera un faux signal en fonctionnement normal — indiquez-moi vos ratios configurés pour que j'ajuste les seuils CPU/RAM séparément (via `fieldConfig.overrides` par nom de série `RAM %` / `CPU %`).
