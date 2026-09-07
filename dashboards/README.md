@@ -18,19 +18,21 @@ Grafana → Dashboards → New → Import → coller le JSON (ou "Upload").
    - `Hosts` = `count(openstack_nova_vcpus_available{aggregates=~".*$aggregate.*"})` — tous les hosts de l'aggregat, activés ou non.
    - `Disabled` = jointure PromQL entre `openstack_nova_agent_state{service="nova-compute", adminState="disabled"}` et `openstack_nova_vcpus_available{aggregates=~...}` via `and on(hostname)`, pour ne compter que les hosts désactivés **appartenant à cet aggregat** (le label `aggregates` n'existe que sur les métriques hyperviseur, pas sur `agent_state`, d'où la jointure par `hostname`).
    - ⚠️ Les seuils par défaut de Grafana (vert <80 / rouge ≥80) auraient fait passer `Hosts` et `VMs` en rouge dès que l'aggregat dépasse 80 hosts/VMs — un override force ces deux champs en vert fixe, indépendamment de la valeur.
-2. **Détail par aggregat** (en dessous) : une section par aggregat, chacune avec un tableau des hosts — pour drill-down.
+2. **Hosts** (en dessous) : une seule vue à plat, un carré par host, filtrée par `$aggregate` — voir ci-dessous.
 
-## Principe (section détail)
+## Principe (section Hosts)
 
-- **`$aggregate`** : liste déroulante multi-select, peuplée depuis le label `aggregates` exposé par l'exporter. Par défaut sur **All** → toutes les rows (une par aggregat) s'affichent. Sélectionner un ou plusieurs aggregats limite l'affichage à ceux-ci.
-- Une **row Grafana est répétée par aggregat** (`repeat: aggregate` sur le panel de type `row`) : une section par aggregat, avec son titre (`Aggregat : <nom>`).
-- Dans chaque row, un panel **Table** interroge directement Prometheus filtré sur `$aggregate` (pas de variable `$hostname` chaînée) : une ligne par host, colonnes `RAM %` / `CPU %` (cellules en jauge colorée) / `Statut` (vert "OK" ou rouge avec la raison si désactivé). Tri par défaut : RAM % décroissant, cliquable sur n'importe quelle colonne.
+- **`$aggregate`** : liste déroulante multi-select. Par défaut sur **All** → tous les hosts (toutes aggregats confondus) s'affichent dans la grille. Sélectionner un seul aggregat → seuls ses hosts s'affichent. C'est un simple filtre, pas une répétition par aggregat.
+- **`$hostname`** : liste des hosts, chaînée sur `$aggregate` (`label_values(openstack_nova_vcpus_available{aggregates=~".*$aggregate.*"}, hostname)`).
+- Un seul panel **Bar gauge**, répété par `$hostname` (**un seul niveau de repeat**, pas de row imbriquée) : un carré par host, avec `R` (RAM %) au-dessus de `C` (CPU %), labels raccourcis et panel compact (`h: 3`).
+- Une 3ᵉ ligne apparaît **uniquement** sur les hosts dont `nova-compute` est désactivé (`openstack_nova_agent_state{adminState="disabled"}`) : bande rouge pleine avec la `disabledReason` réelle si renseignée, sinon `DISABLED` par défaut.
 
-### Correctif appliqué : plus de repeat imbriqué
+### Pourquoi un seul niveau de repeat cette fois
 
-La version précédente utilisait un panel "carrés" répété par host (`repeat: hostname`), une variable elle-même chaînée sur `$aggregate` — un **repeat imbriqué** (row répétée par aggregat contenant un panel répété par host). Ce pattern s'est révélé cassé en pratique : chaque row affichait la liste globale de hosts au lieu de celle filtrée par son propre aggregat (Grafana ne ré-évalue pas la liste de valeurs d'une variable chaînée dans le contexte scopé d'une row répétée). Le panel Table actuel interroge directement `{aggregates=~".*$aggregate.*"}` dans sa propre requête (pas de variable intermédiaire), donc chaque row scope correctement sa requête — un seul niveau de repeat (la row), fiable.
+Une version précédente imbriquait une row répétée par aggregat contenant un panel répété par host (deux niveaux) — Grafana ne ré-évaluait pas correctement la liste de hosts par row, et chaque section affichait tous les hosts au lieu des siens. En repassant à une seule vue (pas de row par aggregat, juste `$aggregate` comme filtre du panel unique), il n'y a plus qu'un seul niveau de repeat (`$hostname`), qui est le pattern fiable déjà utilisé pour la section "Vue d'ensemble" plus haut.
 
-⚠️ Les noms de colonnes après fusion (`Value #A`, `Value #B`, `disabledReason`, etc., renommés en `RAM %` / `CPU %` / `Statut` via la transformation "Organize fields") peuvent différer légèrement selon votre version de Grafana. Si les colonnes semblent vides ou mal nommées à l'import, ouvrez l'éditeur du panel → onglet **Transform** → vérifiez les noms produits par "Merge" et ajustez `renameByName`/`excludeByName` dans "Organize fields" (modifiable directement dans l'UI, pas besoin de retoucher le JSON).
+- `max` est fixé à 100 sur RAM/CPU — si un host est en overcommit (> 100 %), la barre se remplit entièrement mais le texte affiché reste la vraie valeur (ex. `320 %`).
+- Si les barres paraissent trop tassées, réduisez `options.minVizHeight` (actuellement `10`) dans le JSON, ou remontez légèrement `gridPos.h`.
 
 ## Calcul du "théorique"
 
@@ -49,21 +51,11 @@ L'exporter expose `aggregates` comme **une seule chaîne, aggregats séparés pa
 - Mais le menu déroulant `$aggregate` peut lister des entrées composites (`"rack-a,gpu"`) en plus des noms simples, si des hosts cumulent plusieurs aggregats — Prometheus/Grafana ne peuvent pas éclater une valeur de label en plusieurs entrées de variable côté requête.
 - Si vos aggregats sont mutuellement exclusifs (cas le plus courant), ce n'est pas un problème. Sinon, dites-le moi : on peut générer des *recording rules* Prometheus (une règle par aggregat connu) pour produire un label propre par aggregat.
 
-## Synthèse par aggregat
+## Indicateur "nova-compute disabled"
 
-En tête de chaque section aggregat, 4 tuiles :
-- **Hosts** : `count(openstack_nova_vcpus_available{aggregates=~".*$aggregate.*"})`
-- **RAM moyenne** / **CPU moyen** : moyenne des % par host (mêmes seuils vert/orange/rouge que les carrés). Les hosts avec une capacité à 0 (ex. bug de pinning en cours d'investigation) sont **exclus** du calcul via un filtre `and ... > 0`, pour ne pas polluer la moyenne avec un `+Inf`.
-- **VMs** : `sum(openstack_nova_running_vms{aggregates=~".*$aggregate.*"})` — somme toutes tenants confondus (le label `tenant_id` de cette métrique est agrégé par le `sum()`).
-
-## Colonne "Statut" (nova-compute disabled)
-
-La colonne `Statut` du tableau reflète l'état admin de `nova-compute` pour chaque host : `openstack_nova_agent_state{service="nova-compute", adminState="disabled"}`, jointe par `hostname` à `openstack_nova_vcpus_available{aggregates=~...}` (`and on(hostname)`) pour ne garder que les hosts désactivés de cet aggregat.
-
-- Cellule **verte "OK"** si le host est activé (pas de ligne dans la requête `C`, donc valeur nulle après la fusion → mappée sur "OK").
-- Cellule **rouge** avec le texte de la `disabledReason` réelle si elle a été renseignée via `openstack compute service set --disable-reason "..."`, sinon `DISABLED` par défaut (substitution PromQL via `label_replace(..., "^$")`).
-- ⚠️ Suppose que le label `hostname` de `openstack_nova_agent_state` (dérivé de `service.Host`) correspond au `hostname` des métriques hyperviseur (dérivé de `hypervisor.HypervisorHostname`) — cas standard, à vérifier dans Explore si la colonne reste vide pour des hosts que vous savez désactivés.
+- ⚠️ Suppose que le label `hostname` de `openstack_nova_agent_state` (dérivé de `service.Host`) correspond au `hostname` des métriques hyperviseur (dérivé de `hypervisor.HypervisorHostname`) — cas standard, à vérifier dans Explore si la bande rouge n'apparaît jamais pour des hosts que vous savez désactivés.
 - Ne reflète que l'état **admin** (enabled/disabled), pas le heartbeat up/down du service.
+- Note technique déjà signalée : un panel Bar Gauge ne peut pas teinter tout son contour depuis une métrique différente de celle affichée dans chaque barre — la bande rouge pleine (3ᵉ ligne) est le compromis le plus fiable pour signaler l'état sans repasser par un type de panel totalement différent.
 
 ## Seuils à ajuster
 
