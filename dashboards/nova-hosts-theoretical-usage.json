@@ -35,27 +35,147 @@
         "multi": true,
         "includeAll": true,
         "current": { "text": "All", "value": "$__all" }
-      },
-      {
-        "name": "hostname",
-        "type": "query",
-        "label": "Host",
-        "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "query": {
-          "qryType": 1,
-          "query": "label_values(openstack_nova_vcpus_available{aggregates=~\".*$aggregate.*\"}, hostname)",
-          "refId": "hostname-variable"
-        },
-        "definition": "label_values(openstack_nova_vcpus_available{aggregates=~\".*$aggregate.*\"}, hostname)",
-        "sort": 1,
-        "refresh": 2,
-        "multi": true,
-        "includeAll": true,
-        "current": { "text": "All", "value": "$__all" }
       }
     ]
   },
   "panels": [
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Vue d'ensemble",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+    {
+      "id": 41,
+      "type": "stat",
+      "title": "${aggregate}",
+      "repeat": "aggregate",
+      "repeatDirection": "h",
+      "maxPerRow": 8,
+      "gridPos": { "h": 7, "w": 3, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "count(openstack_nova_vcpus_available{aggregates=~\".*$aggregate.*\"})",
+          "legendFormat": "Hosts",
+          "instant": true
+        },
+        {
+          "refId": "E",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "count(openstack_nova_agent_state{service=\"nova-compute\", adminState=\"disabled\"} and on(hostname) openstack_nova_vcpus_available{aggregates=~\".*$aggregate.*\"}) or vector(0)",
+          "legendFormat": "Disabled",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "avg(100 * openstack_nova_memory_used_bytes{aggregates=~\".*$aggregate.*\"} / openstack_nova_memory_available_bytes{aggregates=~\".*$aggregate.*\"} and openstack_nova_memory_available_bytes{aggregates=~\".*$aggregate.*\"} > 0)",
+          "legendFormat": "RAM %",
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "avg(100 * openstack_nova_vcpus_used{aggregates=~\".*$aggregate.*\"} / openstack_nova_vcpus_available{aggregates=~\".*$aggregate.*\"} and openstack_nova_vcpus_available{aggregates=~\".*$aggregate.*\"} > 0)",
+          "legendFormat": "CPU %",
+          "instant": true
+        },
+        {
+          "refId": "D",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum(openstack_nova_running_vms{aggregates=~\".*$aggregate.*\"})",
+          "legendFormat": "VMs",
+          "instant": true
+        }
+      ],
+      "options": {
+        "orientation": "vertical",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "none", "decimals": 0 },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Hosts" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Disabled" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "red", "value": 1 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "VMs" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "RAM %" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "min", "value": 0 },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "orange", "value": 80 },
+                    { "color": "red", "value": 100 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "CPU %" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "min", "value": 0 },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "orange", "value": 80 },
+                    { "color": "red", "value": 100 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
     {
       "id": 1,
       "type": "row",
@@ -63,14 +183,14 @@
       "repeat": "aggregate",
       "repeatDirection": "v",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 },
       "panels": []
     },
     {
       "id": 10,
       "type": "stat",
       "title": "Hosts",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 9 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
@@ -96,7 +216,7 @@
       "id": 11,
       "type": "stat",
       "title": "RAM moyenne",
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 9 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
@@ -134,7 +254,7 @@
       "id": 12,
       "type": "stat",
       "title": "CPU moyen",
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 9 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
@@ -172,7 +292,7 @@
       "id": 13,
       "type": "stat",
       "title": "VMs",
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 9 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
@@ -196,87 +316,122 @@
     },
     {
       "id": 2,
-      "type": "bargauge",
-      "title": "${hostname}",
-      "repeat": "hostname",
-      "repeatDirection": "h",
-      "maxPerRow": 10,
-      "gridPos": { "h": 6, "w": 3, "x": 0, "y": 5 },
+      "type": "table",
+      "title": "Hosts de l'aggregat",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 13 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "100 * openstack_nova_memory_used_bytes{hostname=~\"^$hostname$\"} / openstack_nova_memory_available_bytes{hostname=~\"^$hostname$\"}",
-          "legendFormat": "RAM %",
+          "expr": "100 * openstack_nova_memory_used_bytes{aggregates=~\".*$aggregate.*\"} / openstack_nova_memory_available_bytes{aggregates=~\".*$aggregate.*\"}",
+          "format": "table",
           "instant": true
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "100 * openstack_nova_vcpus_used{hostname=~\"^$hostname$\"} / openstack_nova_vcpus_available{hostname=~\"^$hostname$\"}",
-          "legendFormat": "CPU %",
+          "expr": "100 * openstack_nova_vcpus_used{aggregates=~\".*$aggregate.*\"} / openstack_nova_vcpus_available{aggregates=~\".*$aggregate.*\"}",
+          "format": "table",
           "instant": true
         },
         {
           "refId": "C",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "openstack_nova_agent_state{service=\"nova-compute\", hostname=~\"^$hostname$\", adminState=\"disabled\"} * 0 + 1",
-          "legendFormat": "⚠ DISABLED",
+          "expr": "label_replace(openstack_nova_agent_state{service=\"nova-compute\", adminState=\"disabled\"} and on(hostname) openstack_nova_vcpus_available{aggregates=~\".*$aggregate.*\"}, \"disabledReason\", \"DISABLED\", \"disabledReason\", \"^$\")",
+          "format": "table",
           "instant": true
         }
       ],
-      "options": {
-        "orientation": "horizontal",
-        "displayMode": "gradient",
-        "valueMode": "color",
-        "showUnfilled": true,
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "id": true,
+              "availability_zone": true,
+              "aggregates": true,
+              "service": true,
+              "adminState": true,
+              "Value #C": true
+            },
+            "renameByName": {
+              "hostname": "Host",
+              "Value #A": "RAM %",
+              "Value #B": "CPU %",
+              "disabledReason": "Statut"
+            },
+            "indexByName": { "hostname": 0, "Value #A": 1, "Value #B": 2, "disabledReason": 3 }
+          }
         }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "RAM %", "desc": true }]
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "decimals": 0,
-          "min": 0,
-          "max": 100,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "orange", "value": 80 },
-              { "color": "red", "value": 100 }
-            ]
-          }
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" } }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "⚠ DISABLED" },
+            "matcher": { "id": "byName", "options": "RAM %" },
             "properties": [
-              { "id": "unit", "value": "none" },
-              { "id": "decimals", "value": 0 },
+              { "id": "unit", "value": "percent" },
               { "id": "min", "value": 0 },
-              { "id": "max", "value": 1 },
+              { "id": "max", "value": 100 },
+              { "id": "decimals", "value": 0 },
+              { "id": "custom.cellOptions", "value": { "type": "gauge", "mode": "gradient" } },
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
-                  "steps": [{ "color": "red", "value": null }]
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "orange", "value": 80 },
+                    { "color": "red", "value": 100 }
+                  ]
                 }
-              },
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "CPU %" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "min", "value": 0 },
+              { "id": "max", "value": 100 },
+              { "id": "decimals", "value": 0 },
+              { "id": "custom.cellOptions", "value": { "type": "gauge", "mode": "gradient" } },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "orange", "value": 80 },
+                    { "color": "red", "value": 100 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Statut" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background" } },
               {
                 "id": "mappings",
                 "value": [
-                  {
-                    "type": "value",
-                    "options": { "1": { "text": "⚠ DISABLED", "color": "red", "index": 0 } }
-                  }
+                  { "type": "special", "options": { "match": "null", "result": { "text": "OK", "color": "green" } } },
+                  { "type": "value", "options": { "": { "text": "OK", "color": "green" } } }
                 ]
+              },
+              {
+                "id": "thresholds",
+                "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }] }
               }
             ]
           }
